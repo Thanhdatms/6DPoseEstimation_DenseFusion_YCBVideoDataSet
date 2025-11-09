@@ -1,0 +1,15 @@
+[project]
+name = "densefusion"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "isort>=7.0.0",
+    "matplotlib>=3.10.7",
+    "numpy==1.26.4",
+    "opencv-python>=4.11.0.86",
+    "pandas>=2.3.3",
+    "torch==2.0.1",
+    "torchvision==0.15.2",
+]
