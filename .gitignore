@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+dataset/
+dataset
+
+YCB-Video-Base/
+YCB-Video-Base
