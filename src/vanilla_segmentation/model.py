@@ -130,8 +130,8 @@ class SegNet(nn.Module):
 
         return x11d
     
-if __name__ == "__main__":
-    model = SegNet(input_nbr=3, label_nbr=22)
-    input_tensor = torch.randn(1, 3, 480, 640) 
-    output = model(input_tensor)
-    print(output.shape)  # (1, 22, 480, 640)
+# if __name__ == "__main__":
+#     model = SegNet(input_nbr=3, label_nbr=22)
+#     input_tensor = torch.randn(1, 3, 480, 640) 
+#     output = model(input_tensor)
+#     print(output.shape)  # (1, 22, 480, 640)

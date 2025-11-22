@@ -14,3 +14,5 @@ dataset
 
 YCB-Video-Base/
 YCB-Video-Base
+src/vanilla_segmentation/checkpoints/
+src/vanilla_segmentation/logs

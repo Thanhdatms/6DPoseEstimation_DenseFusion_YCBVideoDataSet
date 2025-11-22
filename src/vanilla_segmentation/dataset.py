@@ -12,8 +12,8 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
-class SegmentationDataSet(data.Dataset):
-    def __init__(self, root_dir, txtlist, use_noise=False, transform=None):
+class SegmentationDataset(data.Dataset):
+    def __init__(self, root_dir, txtlist, use_noise):
         """
         Args:
             root_path: root path contain full data sorce
@@ -23,8 +23,6 @@ class SegmentationDataSet(data.Dataset):
         """
         self.root_dir = root_dir
         self.use_noise = use_noise
-        self.transform = transform
-
         # read file path
         with open(txtlist, 'r') as f:
             self.path = [line.strip() for line in f if line.strip()] # including real and synthetic
@@ -54,7 +52,6 @@ class SegmentationDataSet(data.Dataset):
     def __getitem__(self, idx):
         index = idx % self.data_len
         item = self.path[index]
-        print(f"Loading item: {item}")
         # load label + meta
         label = np.array(self._load_image(item, "label")) 
         meta = scio.loadmat(os.path.join(self.root_dir, f"{item}-meta.mat"))
@@ -114,9 +111,7 @@ class SegmentationDataSet(data.Dataset):
                 label = np.flipud(np.fliplr(label))
 
         # Convert to tensors
-        print(rgb.shape)
         rgb = torch.tensor(rgb.transpose(2, 0, 1).copy(), dtype=torch.float32) / 255.0
-        print(rgb.shape)
         rgb = self.normalize(rgb)
 
         target = torch.tensor(label.copy(), dtype=torch.int64)
@@ -163,7 +158,7 @@ if __name__ == "__main__":
     txt_list = r"C:\Users\ADMIN\Documents\AI\DenseFusion\YCB-Video-Base\image_sets\test_data_train.txt"
 
     # Create dataset
-    dataset = SegmentationDataSet(
+    dataset = SegmentationDataset(
         root_dir=root_dir,
         txtlist=txt_list,
         use_noise=True,
