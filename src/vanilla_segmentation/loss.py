@@ -15,7 +15,7 @@ def loss_calculation (semantic, target):
     batch_size = semantic.size()[0]
 
     target = target.view(batch_size, -1).view(-1).contiguous() # flatten to [batch_size * 480 * 640]
-    semantic = semantic.view(batch_size, 3, pixel_num).permute(0,2,1).contiguous().view(batch_size * pixel_num, 3).contiguous()
+    semantic = semantic.view(batch_size, 22, pixel_num).permute(0,2,1).contiguous().view(batch_size * pixel_num, 22).contiguous()
 
     semantic_loss = CEloss(semantic, target)
 
@@ -26,4 +26,5 @@ class Loss(_Loss):
         super(Loss, self).__init__()
 
     def forward(self, semantic, target):
-        loss_calculation(semantic, target)
+        loss = loss_calculation(semantic, target)
+        return loss
