@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from src.vanilla_segmentation.dataset import SegmentationDataset
 from src.vanilla_segmentation.model import SegNet
 from src.vanilla_segmentation.loss import Loss
-from src.lib.utils import setup_logger
+from src.vanilla_segmentation.lib.utils import setup_logger
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset_root',
@@ -36,10 +36,10 @@ torch.backends.cudnn.benchmark = False
 def main():
     # dataset and dataloader
     
-    train_dataset = SegmentationDataset(opt.dataset_root, 'src/settings/dataset_config/train_list.txt', True)
+    train_dataset = SegmentationDataset(opt.dataset_root, 'src/vanilla_segmentation/settings/dataset_config/train_list.txt', True)
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True, num_workers=int(opt.n_workers))
 
-    test_dataset = SegmentationDataset(opt.dataset_root, 'src/settings/dataset_config/val_list.txt', False)
+    test_dataset = SegmentationDataset(opt.dataset_root, 'src/vanilla_segmentation/settings/dataset_config/val_list.txt', False)
     test_dataloader = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.n_workers)
 
     print("Train dataset length:", train_dataset.__len__())
