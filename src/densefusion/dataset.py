@@ -65,7 +65,7 @@ class PoseDataset(data.Dataset):
         self.img_width = 480
         self.img_length = 640
     
-    # ------- Helper ----------
+    # ------------- Helper Functions -------------
 
     def _load_image(self, path):
         data_list = []
@@ -116,7 +116,7 @@ class PoseDataset(data.Dataset):
         return self.num_pt_mesh_small if not self.refine else self.num_pt_mesh_large
     
     def __getitem__(self, index):
-        #loa
+        sample_name = self.list[index]
         img = Image.open(os.path.join(self.root, f"{self.list[index]}-color.png"))
         depth = np.array(Image.open(os.path.join(self.root, f"{self.list[index]}-depth.png")))
         label = np.array(Image.open(os.path.join(self.root, f"{self.list[index]}-label.png")))
@@ -140,8 +140,51 @@ class PoseDataset(data.Dataset):
         if self.add_noise:
             add_front, front_mask, front_img = self._add_front_noise(label, mask_back)
 
+        # Each frame has meta file containing id about objects in the frame ([ 5  7  9 10 16 18]) (N, 1) -> (N,)
+        obj_idx = meta['cls_indexes'].flatten().astype(np.int32)
+
+        # 
+        mask_label, idx = self._sample_object_mask(depth, label, obj_idx)
+        
+        if self.add_noise:
+            img = self.transcolor(img)
+
+        img_masked, mask_conbined = self._crop_and_mask_image(
+            img, mask_label, sample_name, mask_back, front_img, front_mask, add_front
+        )
+        
+        # model_points = self._sample_model_points(obj_idx[idx])
+
+        # # Target transfromation
+        # target_r = meta['poses'][:, :, idx][:, :3] # rotation matrix 3x3 example: [[ 0.9998, -0.0176,  0.0083],
+        #                                             #                      [ 0.0174,  0.9998, -0.0095],
+        #                                             #                      [-0.0086,  0.0093,  0.9999]]
+        # target_t = meta['poses'][:, :, idx][:, 3] # translation vector 3x1 example: [[ 0.1234],
+        #                                             #                        [-0.0345],
+        #                                             #                        [ 0.5678]]
+        # if self.add_noise:
+        #     add_t = np.array([random.uniform(-self.noise_trans, self.noise_trans) for _ in range(3)])
+        # else:
+        #     add_t = np.array([0, 0, 0])
+
+        # target = np.dot(model_points, target_r.T)
+        # target = target + target_t + add_t
+
+        # # Convert to torch tensors
+        # cloud = np.concatenate((depth_masked, xmap_masked, ymap_masked), axis=1)
+
+
     # ------------- Helper Functions -------------
+    
     def _add_front_noise(self, label, mask_back):
+        """
+        Add front view noise to simulate occlusion from other objects
+        1. Randomly select a synthetic image from the synthetic dataset
+        2. Check if the selected image has enough objects in the front view
+        3. Create a mask for the front view objects
+        4. Ensure that the main object is not overly occluded (at least 1000 points remain)
+        5. Return the mask and front image if successful, otherwise return False    
+        """
         for _ in range(0):
             seed = random.choice(self.syn)
             front = np.array(self.transcolor(
@@ -169,8 +212,99 @@ class PoseDataset(data.Dataset):
                 return True, mask_front, front
             
         return False, None, None
+    
+    def _sample_object_mask(self, depth, label, obj_idx):
 
+        for _ in range(10):
+            idx = np.random.randint(len(obj_idx))
+            obj_id = obj_idx[idx]
 
+            mask_obj = (label == obj_id)
+            mask_depth = (depth != 0)
 
+            mask = mask_obj & mask_depth
 
+            if mask.sum() > self.minimun_num_pt:
+                return mask, idx
+            
+        # If no object has enough points, return the object with the maximum points
+        num_points_list = [(label==idx) & (depth!=0) for idx in obj_idx]
+        num_points_counts = [np.sum(num_points) for num_points in num_points_list]
+        max_idx = np.argmax(num_points_counts)
+        return (label == num_points_list[max_idx]), max_idx
+            
+    def _crop_and_mask_image(self, img, mask_label, name, mask_back, front_img, front_mask, add_front):
+        """
+        Crop and mask the image based on the object mask
+        1. Find the bounding box of the object in the mask
+        2. Snap the bounding box to predefined borders
+        3. Crop the image and mask based on the bounding box
+        4. Apply masking to the cropped image
+        5. If add_front is True, blend in the front view noise
+        6. Add Gaussian noise if add_noise is True
+        """
+        rmin, rmax, cmin, cmax= get_bbox(mask_label)
+        img = np.transpose(np.array(img)[:, :, :3], (1, 0, 2))[:, rmin:rmax, cmin:cmax] # delete alpha channel if exists
+
+        # Apply synthetic backgroud if required
+        if 'data_syn' in name:
+            seed = random.choice(self.real)
+            back = np.array(
+                Image.open(os.path.join(self.root, f"{seed}-color.png")).convert("RGB")
+            )
+            back = np.transpose(back, (1, 0, 2))[:, rmin:rmax, cmin:cmax]
+            img_masked = back * mask_back[rmin:rmax, cmin:cmax] # apply background mask (mask_back = 1 1 1 0 0, back = 10 10 10 10 10, img  =  5  5  5 99 99 -> img_masked = 10 10 10 0 0)
+            img_masked = img_masked + img
+        else:
+            img_masked = img
+
+        if self.add_noise and add_front:
+            img_masked = img_masked * front_mask[rmin:rmax, cmin:cmax] + \
+                         front_img[:, rmin:rmax, cmin:cmax] * ~(front_mask[rmin:rmax, cmin:cmax])
+
+        if 'data_syn' in name:
+            img_masked = img_masked + np.random.normal(loc=self.noise_img_loc, scale=self.noise_img_scale, size=img_masked.shape)
+        
+        return img_masked, mask_label
+
+    def _sample_model_points(self, obj_id):
+        points = self.point_cloud[obj_id]
+        num_sample = self.num_pt_mesh_large if self.refine else self.num_pt_mesh_small
+        if len(points) > num_sample:
+            dellist = np.random.choice(len(points), len(points)-num_sample, replace=False)
+            points = np.delete(points, dellist, axis=0)
+
+        return points
+
+def get_bbox(mask):
+    border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
+    img_width = 480
+    img_length = 640
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    # get bounding box of object
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    rmax += 1
+    cmax += 1
+    r_box, c_box = rmax - rmin, cmax - cmin
+
+    for tt in range(len(border_list)):
+        if r_box > border_list[tt] and r_box <= border_list[tt + 1]:
+            r_box = border_list[tt + 1]
+            break
+
+    for tt in range(len(border_list)):
+        if c_box > border_list[tt] and c_box <= border_list[tt + 1]:
+            c_box = border_list[tt + 1]
+            break
+    
+    # calculate center of bounding box
+    r_center = [(rmin + rmax) // 2, (cmin + cmax) // 2]
+    rmin = max(r_center[0] - r_box // 2, 0)
+    rmax = min(r_center[0] + r_box // 2, img_width)
+    cmin = max(r_center[1] - c_box // 2, 0)
+    cmax = min(r_center[1] + c_box // 2, img_length)
+
+    return rmin, rmax, cmin, cmax
 
