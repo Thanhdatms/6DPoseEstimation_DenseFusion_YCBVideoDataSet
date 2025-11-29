@@ -227,31 +227,3 @@ class PoseDataset(data.Dataset):
             points = np.delete(points, dellist, axis=0)
         return points
 
-
-# Bounding box helper (unchanged)
-def get_bbox(label):
-    border_list = [-1, 40, 80, 120, 160, 200, 240, 280, 320, 360, 400, 440, 480, 520, 560, 600, 640, 680]
-    img_width, img_length = 480, 640
-    rows = np.any(label, axis=1)
-    cols = np.any(label, axis=0)
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
-    rmax += 1
-    cmax += 1
-    r_b, c_b = rmax - rmin, cmax - cmin
-    for tt in range(len(border_list)):
-        if r_b > border_list[tt] and r_b < border_list[tt + 1]:
-            r_b = border_list[tt + 1]
-            break
-
-    for tt in range(len(border_list)):
-        if c_b > border_list[tt] and c_b < border_list[tt + 1]:
-            c_b = border_list[tt + 1]
-            break
-        
-    center = [int((rmin + rmax) / 2), int((cmin + cmax) / 2)]
-    rmin = max(center[0] - r_b // 2, 0)
-    rmax = min(center[0] + r_b // 2, img_width)
-    cmin = max(center[1] - c_b // 2, 0)
-    cmax = min(center[1] + c_b // 2, img_length)
-    return rmin, rmax, cmin, cmax
